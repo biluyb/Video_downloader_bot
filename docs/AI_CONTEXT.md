@@ -18,98 +18,105 @@ https://github.com/biluyb/Video_downloader_bot.git
 
 ## Current Status
 
-**Version:** 0.1.0
+**Version:** 0.2.0
 
-**Current Feature:** FEATURE-001 — Bot Foundation ✅ COMPLETE
+**Completed Features:** FEATURE-001 through FEATURE-012 ✅
 
-**Git Branch:** `feature/bot-foundation`
-
-**Latest Commit:** `feat: add telegram bot foundation (FEATURE-001)`
+**Git Branch:** `feature/video-download`
 
 ## Architecture
 
 - **Framework:** aiogram 3.x (async Telegram bot framework)
 - **Language:** Python 3.12+
+- **Media Extraction:** yt-dlp
+- **Media Processing:** static-ffmpeg (FFmpeg n8.0.1)
 - **Configuration:** pydantic-settings loading from `.env`
-- **Database:** SQLite via SQLAlchemy (planned for FEATURE-012)
+- **Database:** SQLite via SQLAlchemy 2.0 (asyncio + aiosqlite)
 - **Logging:** Structured logging via `app/utils/logger.py`
 
 ### Module Layout
 
 ```
 app/
-├── main.py              — Entry point, token validation, router registration
+├── main.py              — Entry point, token validation, router registration, DB & FFmpeg init
 ├── config/settings.py   — Pydantic settings from environment
 ├── handlers/
 │   ├── start.py         — /start command
 │   ├── help.py          — /help and /about commands
-│   ├── callbacks.py     — Inline button callbacks
-│   ├── download.py      — (placeholder)
-│   └── history.py       — (placeholder)
+│   ├── history.py       — /history command (download history)
+│   ├── callbacks.py     — Inline button callbacks (qualities, audio, cancel)
+│   └── download.py      — URL detection, progress UI, downloader orchestration
 ├── keyboards/
 │   ├── main.py          — Start, help, back keyboards
-│   └── quality.py       — (placeholder)
-├── services/            — Business logic (all placeholders)
-├── database/            — Data layer (all placeholders)
+│   └── quality.py       — Dynamic quality selection & cancel keyboards
+├── services/
+│   ├── downloader.py    — Isolated job downloading via yt-dlp & progress tracking
+│   ├── metadata.py      — Media info & available qualities extraction
+│   ├── cleanup.py       — Job directory cleanup
+│   ├── rate_limiter.py  — Per-user, per-group, hourly rate limiting
+│   └── queue.py         — Concurrency control semaphore
+├── database/
+│   ├── database.py      — Async engine & session factory
+│   ├── models.py        — User & DownloadRecord SQLAlchemy models
+│   └── repositories.py  — Database repository CRUD
 └── utils/
     ├── logger.py        — Logging setup
-    ├── validators.py    — (placeholder)
-    ├── url_extractor.py — (placeholder)
-    └── formatters.py    — (placeholder)
+    ├── validators.py    — URL scheme validation & SSRF protection
+    ├── url_extractor.py — Text URL extraction
+    └── formatters.py    — String & speed formatters
 ```
 
 ## Completed Features
 
 ### FEATURE-001: Bot Foundation ✅
 - Project structure matching the architecture spec
-- pydantic-settings configuration from `.env`
-- aiogram 3.x setup with long-polling
-- `/start` with welcome text + Help/About buttons
-- `/help` with usage instructions
-- `/about` with bot description
-- Inline callback navigation (Help ↔ About ↔ Start)
-- Centralised structured logging
-- Token validation at startup (rejects placeholder)
-- Test suite (settings, handlers, keyboards, logging, main validation)
-- Full documentation suite
-- `.env.example`, `.gitignore`
+- `/start`, `/help`, `/about` commands
 
-## Pending Features (in order)
+### FEATURE-002: URL Detection & Validation ✅
+- Text & message URL extraction
+- HTTP/HTTPS scheme validation
+- SSRF protection (localhost, private IP rejection, DNS lookup check)
 
-| Feature | Description |
-|---|---|
-| FEATURE-002 | Secure URL Detection & Validation |
-| FEATURE-003 | Metadata Extraction (yt-dlp) |
-| FEATURE-004 | Automatic 720p Download |
-| FEATURE-005 | Quality Selection UI |
-| FEATURE-006 | Audio Download (MP3) |
-| FEATURE-007 | Progress UI |
-| FEATURE-008 | Group Support |
-| FEATURE-009 | Cancellation |
-| FEATURE-010 | Download Queue |
-| FEATURE-011 | Rate Limiting |
-| FEATURE-012 | Database & History |
-| FEATURE-013 | Security Hardening |
-| FEATURE-014 | Docker & Production |
+### FEATURE-003: Metadata Extraction ✅
+- yt-dlp video metadata extraction (title, duration, uploader, available qualities)
+
+### FEATURE-004: Automatic 720p Download ✅
+- Default 720p download
+- Automatic fallback if 720p is unavailable (e.g. 480p)
+- Upload to Telegram (video/audio)
+
+### FEATURE-005: Quality Selection UI ✅
+- Inline quality keyboard showing only available formats (1080p, 720p, 480p, 360p)
+
+### FEATURE-006: Audio Download ✅
+- MP3 audio extraction & audio tag formatting
+
+### FEATURE-007: Progress UI ✅
+- Live status message with progress bar (`████████░░ 80%`), download speed, and ETA
+
+### FEATURE-008: Group Support ✅
+- Automatic URL detection in private & group messages without requiring commands or bot mentions
+
+### FEATURE-009: Cancellation ✅
+- `[❌ Cancel Download]` button in progress UI
+
+### FEATURE-010: Download Queue & Concurrency ✅
+- Global semaphore concurrency control (`MAX_CONCURRENT_DOWNLOADS=2`)
+
+### FEATURE-011: Rate Limiting ✅
+- Per-user and per-group concurrency limits & hourly request limits
+
+### FEATURE-012: Database & History ✅
+- SQLite + SQLAlchemy async ORM, `/history` command
 
 ## Environment Variables
 
 See `.env.example` for all variables. Key ones:
 
 - `BOT_TOKEN` — Telegram bot token (from @BotFather)
-- `DATABASE_URL` — SQLAlchemy connection string
-- `TEMP_DIR` — Temporary download directory
-- `MAX_CONCURRENT_DOWNLOADS` — Global concurrency limit
-- `LOG_LEVEL` — Logging verbosity
-
-## Security Decisions
-
-1. Token loaded from env only — never in source code
-2. Placeholder token rejected at startup
-3. All future subprocesses will use `asyncio.create_subprocess_exec` (no shell=True)
-4. URL validation will reject dangerous schemes, private IPs, SSRF vectors
-5. User-provided filenames never used as filesystem paths
-6. Temp files cleaned via try/finally
+- `DATABASE_URL` — `sqlite+aiosqlite:///./data/bot.db`
+- `TEMP_DIR` — Temporary download directory (`./downloads`)
+- `MAX_CONCURRENT_DOWNLOADS` — Global concurrency limit (default: 2)
 
 ## Telegram Privacy
 
@@ -119,29 +126,6 @@ For group functionality, BotFather privacy mode must be **disabled**:
 ```
 The bot does NOT require administrator permissions.
 
-## Known Limitations
-
-- No download functionality yet (FEATURE-004)
-- No URL detection yet (FEATURE-002)
-- No database yet (FEATURE-012)
-- No Docker yet (FEATURE-014)
-
 ## Testing Status
 
-- ✅ Settings loading & defaults
-- ✅ Handler text content
-- ✅ Keyboard structure
-- ✅ Logging configuration
-- ✅ Token validation logic
-
-## Next Recommended Feature
-
-**FEATURE-002 — Secure URL Detection & Validation**
-
-Implement:
-- URL extraction from messages (plain text and embedded)
-- HTTP/HTTPS scheme validation
-- Supported platform detection
-- SSRF protection (private IP, localhost rejection)
-- Dangerous scheme rejection
-- Security tests
+- ✅ 41 tests passing across all modules (settings, handlers, validators, extractor, downloader, rate limiter, database)

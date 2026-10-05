@@ -6,9 +6,13 @@ pydantic-settings>=2.0,<3.0
 # Database
 sqlalchemy>=2.0,<3.0
 aiosqlite>=0.20,<1.0
+greenlet>=3.0.0
 
 # Utilities
 aiohttp>=3.9,<4.0
+
+# Media extraction & processing
+yt-dlp>=2024.0.0
 
 # Testing
 pytest>=8.0,<9.0

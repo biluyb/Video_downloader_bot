@@ -12,7 +12,14 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
 from app.config.settings import get_settings
-from app.handlers import callbacks_router, help_router, start_router
+from app.database.database import init_db
+from app.handlers import (
+    callbacks_router,
+    download_router,
+    help_router,
+    history_router,
+    start_router,
+)
 from app.utils.logger import get_logger, setup_logging
 
 
@@ -20,6 +27,13 @@ async def main() -> None:
     """Initialise and start the bot."""
     setup_logging()
     logger = get_logger(__name__)
+
+    # Ensure static ffmpeg binaries are in PATH
+    try:
+        import static_ffmpeg
+        static_ffmpeg.add_paths()
+    except Exception as fe:
+        logger.warning("static_ffmpeg setup warning: %s", fe)
 
     settings = get_settings()
 
@@ -38,6 +52,12 @@ async def main() -> None:
     Path(settings.temp_dir).mkdir(parents=True, exist_ok=True)
     Path("data").mkdir(parents=True, exist_ok=True)
 
+    # ── Initialize Database ──────────────────────────────────
+    try:
+        await init_db()
+    except Exception as dbe:
+        logger.error("Failed to initialize database: %s", dbe)
+
     logger.info("Starting Download Via Link (@lookvidbot) v0.1.0")
 
     # ── Bot & dispatcher ──────────────────────────────────────
@@ -47,10 +67,12 @@ async def main() -> None:
     )
     dp = Dispatcher()
 
-    # Register routers
+    # Register routers in priority order
     dp.include_router(start_router)
     dp.include_router(help_router)
+    dp.include_router(history_router)
     dp.include_router(callbacks_router)
+    dp.include_router(download_router)  # Handles text URLs
 
     # ── Start polling ─────────────────────────────────────────
     logger.info("Bot is running. Press Ctrl+C to stop.")
