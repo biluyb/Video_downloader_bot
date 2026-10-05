@@ -55,6 +55,11 @@ def _extract_metadata_sync(url: str) -> MediaMetadata:
         "socket_timeout": 20,
         "nocheckcertificate": True,
         "legacyserverconnect": True,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "ios", "web", "mweb"]
+            }
+        },
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -62,10 +67,29 @@ def _extract_metadata_sync(url: str) -> MediaMetadata:
         },
     }
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info: Dict[str, Any] = ydl.extract_info(url, download=False)
-        if not info:
-            raise ValueError("Failed to extract media information.")
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info: Dict[str, Any] = ydl.extract_info(url, download=False)
+            if not info:
+                raise ValueError("Failed to extract media information.")
+    except Exception as e:
+        from app.services.tiktok_fallback import is_tiktok_url, fetch_tiktok_info_sync
+        if is_tiktok_url(url):
+            logger.info("yt-dlp metadata failed for TikTok (%s), invoking TikTok fallback service...", e)
+            tk_info = fetch_tiktok_info_sync(url)
+            return MediaMetadata(
+                url=url,
+                title=tk_info.title,
+                duration=tk_info.duration,
+                uploader=tk_info.uploader,
+                extractor="TikTok",
+                available_qualities=[720],
+                has_audio=True,
+                best_quality_720=720,
+                is_720_available=True,
+                thumbnail=tk_info.cover_url,
+            )
+        raise
 
         # In case info is a playlist, select the first entry
         if "entries" in info and info["entries"]:

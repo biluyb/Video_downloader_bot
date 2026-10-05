@@ -138,6 +138,11 @@ class DownloadJob:
             "socket_timeout": 30,
             "nocheckcertificate": True,
             "legacyserverconnect": True,
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android", "ios", "web", "mweb"]
+                }
+            },
             "http_headers": {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -145,8 +150,26 @@ class DownloadJob:
             },
         }
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([self.url])
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([self.url])
+        except Exception as e:
+            from app.services.tiktok_fallback import is_tiktok_url, fetch_tiktok_info_sync, download_file_sync
+            if is_tiktok_url(self.url):
+                logger.info("yt-dlp download failed for TikTok (%s), invoking TikTok fallback downloader...", e)
+                tk_info = fetch_tiktok_info_sync(self.url)
+                target_url = tk_info.audio_url if (self.is_audio and tk_info.audio_url) else tk_info.video_url
+                ext = "mp3" if self.is_audio else "mp4"
+                safe_title = "".join([c for c in tk_info.title if c.isalnum() or c in (" ", "-", "_")]).strip()[:50] or "tiktok_video"
+                output_file = self.job_dir / f"{safe_title}.{ext}"
+                download_file_sync(target_url, output_file)
+                self.progress.status = "completed"
+                self.progress.percent = 100.0
+                self.progress.filename = output_file.name
+                if callback:
+                    callback(self.progress)
+                return output_file
+            raise
 
         if self.cancelled:
             raise RuntimeError("Download cancelled by user.")
